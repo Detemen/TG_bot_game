@@ -1,5 +1,10 @@
 # Marble Race Game 🎲
 
+![React](https://img.shields.io/badge/React-frontend-61DAFB?logo=react&logoColor=black)
+![Node.js](https://img.shields.io/badge/Node.js-backend-339933?logo=node.js&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram-Mini%20App-26A5E4?logo=telegram&logoColor=white)
+
 Telegram Mini App для ігор у Marble Race з можливістю робити ставки в TON та Telegram Stars.
 
 ## 🚀 Швидкий старт
