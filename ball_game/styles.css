@@ -1,0 +1,17 @@
+:root { --bg:#f6f6f6; --ink:#111; --ui:#e7e7e7; }
+* { box-sizing:border-box; }
+html,body { height:100%; }
+body {
+  margin:0; font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  display:flex; flex-direction:column; background:var(--bg); color:var(--ink);
+}
+header { padding:10px 14px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+h1 { margin:0 10px 0 0; font-size:18px; }
+.controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+label { background:#fff; padding:6px 8px; border:1px solid var(--ui); border-radius:6px; }
+input { width:84px; border:0; outline:0; background:transparent; }
+button { padding:8px 12px; border:1px solid var(--ui); border-radius:6px; background:#fff; cursor:pointer; }
+button:hover { background:#fafafa; }
+main { display:grid; place-items:center; flex:1; padding:10px; }
+canvas { background:var(--bg); border:1px solid var(--ui); border-radius:10px; width:360px; height:520px; }
+footer { padding:8px 14px; color:#555; }

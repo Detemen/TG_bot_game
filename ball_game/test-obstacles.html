@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Тест Перешкод — Marble Race</title>
+<style>
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,sans-serif}
+  body{
+    display:flex;flex-direction:column;align-items:center;
+    background:linear-gradient(180deg, #0a0e27 0%, #1a1e3f 100%);
+    color:#fff;padding:20px;
+  }
+  h1{margin:0 0 10px 0;font-size:28px;font-weight:600}
+  .subtitle{opacity:0.7;margin-bottom:20px;font-size:14px}
+
+  .controls{
+    display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;justify-content:center;
+    max-width:800px;
+  }
+  .controls button{
+    padding:12px 20px;border:none;border-radius:8px;
+    background:#2d3a5f;color:#fff;cursor:pointer;
+    font-size:14px;font-weight:500;transition:all 0.2s;
+  }
+  .controls button:hover{background:#3d4a6f;transform:translateY(-2px)}
+  .controls button.active{background:#4a9eff;box-shadow:0 0 0 2px rgba(74,158,255,0.3)}
+
+  #canvas-wrapper{
+    position:relative;border-radius:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    overflow:hidden;
+  }
+  canvas{display:block;background:#05071a}
+
+  .info{
+    margin-top:20px;padding:15px 25px;background:rgba(45,58,95,0.5);
+    border-radius:12px;max-width:600px;text-align:center;
+    font-size:14px;line-height:1.6;
+  }
+  .info strong{color:#4a9eff}
+
+  .ball-controls{
+    margin-top:15px;display:flex;gap:10px;justify-content:center;
+  }
+  .ball-controls button{
+    padding:10px 18px;border:none;border-radius:8px;
+    background:#1a8f5f;color:#fff;cursor:pointer;
+    font-size:13px;font-weight:500;transition:all 0.2s;
+  }
+  .ball-controls button:hover{background:#2aaf7f;transform:translateY(-2px)}
+  .ball-controls button.clear{background:#d84545}
+  .ball-controls button.clear:hover{background:#e85555}
+</style>
+</head>
+<body>
+  <h1>🎱 Тест Перешкод</h1>
+  <p class="subtitle">Кліком створюй кульки та тестуй кожну перешкоду окремо</p>
+
+  <div class="controls">
+    <button data-obstacle="brickWall" class="active">🧱 Brick Wall</button>
+    <button data-obstacle="movingBar">↔️ Moving Bar</button>
+    <button data-obstacle="plinko">⚪ Plinko Grid</button>
+    <button data-obstacle="fans">💨 Fans</button>
+    <button data-obstacle="maze">🌀 Maze</button>
+    <button data-obstacle="triangles">🔺 Triangles + Teleports</button>
+    <button data-obstacle="circles">⭕ Rotating Circles</button>
+    <button data-obstacle="funnel">🔽 V-Funnel</button>
+  </div>
+
+  <div id="canvas-wrapper">
+    <canvas id="stage" width="390" height="600"></canvas>
+  </div>
+
+  <div class="ball-controls">
+    <button id="dropBall">Кинути кульку</button>
+    <button id="drop5Balls">Кинути 5 кульок</button>
+    <button id="clearBalls" class="clear">Очистити кульки</button>
+  </div>
+
+  <div class="info">
+    <strong>Поточна перешкода:</strong> <span id="currentObstacle">Brick Wall</span><br>
+    <span id="obstacleDescription">Цегляна стіна з 3 HP. Кульки руйнують кирпичі при зіткненні.</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <script type="module">
+    import {
+      createBrickWall,
+      createMovingBar,
+      createPlinkoGrid,
+      createFans,
+      createMaze,
+      createTrianglesWithTeleports,
+      createRotatingCircles,
+      createVFunnel,
+      cleanupObstacle
+    } from './src/obstacles.js';
+
+    const Matter = window.Matter;
+    const canvas = document.getElementById('stage');
+    const W = canvas.width;
+    const H = canvas.height;
+
+    // Створюємо движок
+    const engine = Matter.Engine.create();
+    engine.world.gravity.y = 1.1;
+
+    const render = Matter.Render.create({
+      canvas,
+      engine,
+      options: {
+        width: W,
+        height: H,
+        wireframes: false,
+        background: '#05071a',
+        pixelRatio: window.devicePixelRatio || 1
+      }
+    });
+
+    Matter.Engine.run(engine);
+    Matter.Render.run(render);
+
+    // Межі
+    const walls = [
+      Matter.Bodies.rectangle(W/2, -25, W, 50, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+      Matter.Bodies.rectangle(W/2, H+25, W, 50, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+      Matter.Bodies.rectangle(-25, H/2, 50, H, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+      Matter.Bodies.rectangle(W+25, H/2, 50, H, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+    ];
+    Matter.World.add(engine.world, walls);
+
+    // Поточна перешкода
+    let currentObstacleObj = null;
+    let currentType = 'brickWall';
+
+    // Описи перешкод
+    const descriptions = {
+      brickWall: 'Цегляна стіна з 3 HP та пружністю. Кульки ЗАВЖДИ відскакують при зіткненні (червоний → світлий → прозорий → руйнується).',
+      movingBar: 'Горизонтальна балка з високою пружністю, що рухається вліво-вправо по синусоїді.',
+      plinko: 'Класична сітка пегів у шахматному порядку (6x6). Кульки відскакують випадково.',
+      fans: '3-4 вентилятори з невидимою силою. Показані частинки повітря що летять. Штовхають кульки вліво/вправо.',
+      maze: 'Лабіринт з 3 поверхів зигзагом. Тільки перешкоди, без вентиляторів.',
+      triangles: 'Ряд з 4 трикутників. Зелений портал (рухомий) телепортує в червоний портал (під зеленим). Кулька вилітає під випадковим кутом 0-180°.',
+      circles: '2 обертаючі круглі труби з отворами зліва і справа. Ліве проти, праве за годинниковою.',
+      funnel: 'V-подібна воронка для звуження потоку. Є прохід знизу (80px).'
+    };
+
+    // Функція створення перешкоди
+    function loadObstacle(type) {
+      // Очищаємо попередню
+      if (currentObstacleObj) {
+        cleanupObstacle(currentObstacleObj);
+      }
+
+      // Очищаємо всі кульки
+      clearAllBalls();
+
+      currentType = type;
+
+      const obstacleY = 150;
+      const obstacleHeight = 300;
+
+      switch(type) {
+        case 'brickWall':
+          currentObstacleObj = createBrickWall(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight,
+            rows: 3
+          });
+          break;
+
+        case 'movingBar':
+          currentObstacleObj = createMovingBar(Matter, engine, {
+            x: 0,
+            y: obstacleY + 50,
+            width: W,
+            barWidth: 150,
+            barHeight: 20,
+            speed: 0.002,
+            amplitude: 100
+          });
+          break;
+
+        case 'plinko':
+          currentObstacleObj = createPlinkoGrid(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight,
+            rows: 6,
+            cols: 6
+          });
+          break;
+
+        case 'fans':
+          currentObstacleObj = createFans(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight,
+            fanCount: 4
+          });
+          break;
+
+        case 'maze':
+          currentObstacleObj = createMaze(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight,
+            levels: 3
+          });
+          break;
+
+        case 'triangles':
+          currentObstacleObj = createTrianglesWithTeleports(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight
+          });
+          break;
+
+        case 'circles':
+          currentObstacleObj = createRotatingCircles(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight,
+            circleCount: 2
+          });
+          break;
+
+        case 'funnel':
+          currentObstacleObj = createVFunnel(Matter, engine, {
+            x: 30,
+            y: obstacleY,
+            width: W - 60,
+            height: obstacleHeight
+          });
+          break;
+
+        default:
+          currentObstacleObj = null;
+      }
+
+      // Оновлюємо UI
+      document.getElementById('currentObstacle').textContent =
+        type.replace(/([A-Z])/g, ' $1').trim();
+      document.getElementById('obstacleDescription').textContent = descriptions[type];
+    }
+
+    // Кастомний рендер для додаткових елементів
+    Matter.Events.on(render, 'afterRender', () => {
+      if (currentObstacleObj && currentObstacleObj.renderFans) {
+        currentObstacleObj.renderFans(render.context);
+      }
+      if (currentObstacleObj && currentObstacleObj.renderCircles) {
+        currentObstacleObj.renderCircles(render.context);
+      }
+    });
+
+    // Кнопки перемикання перешкод
+    document.querySelectorAll('[data-obstacle]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('[data-obstacle]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadObstacle(btn.dataset.obstacle);
+      });
+    });
+
+    // Функція створення кульки
+    function createBall(x = null, y = null) {
+      const ballX = x || W * (0.3 + Math.random() * 0.4);
+      const ballY = y || 30;
+      const r = 12;
+
+      const colors = ['#73ffe1', '#75a6ff', '#f6ff7a', '#ff6bbd', '#b07bff', '#ff9f68'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
+      const ball = Matter.Bodies.circle(ballX, ballY, r, {
+        restitution: 0.7, // Збільшена пружність для кращого відскоку від кирпичів
+        friction: 0.05,
+        frictionAir: 0.01,
+        density: 0.002,
+        render: { fillStyle: color }
+      });
+
+      Matter.World.add(engine.world, ball);
+      return ball;
+    }
+
+    // Очистка кульок
+    function clearAllBalls() {
+      const balls = engine.world.bodies.filter(b =>
+        !b.isStatic &&
+        b.label !== 'brick' &&
+        b.label !== 'peg' &&
+        b.label !== 'mazeBar' &&
+        b.label !== 'movingBar' &&
+        b.label !== 'triangle' &&
+        b.label !== 'greenPortal' &&
+        b.label !== 'redPortal' &&
+        b.label !== 'circleSegment'
+      );
+      Matter.World.remove(engine.world, balls);
+    }
+
+    // Кнопки управління кульками
+    document.getElementById('dropBall').addEventListener('click', () => createBall());
+
+    document.getElementById('drop5Balls').addEventListener('click', () => {
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => createBall(), i * 150);
+      }
+    });
+
+    document.getElementById('clearBalls').addEventListener('click', clearAllBalls);
+
+    // Клік на canvas
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      createBall(x, y);
+    });
+
+    // Завантажуємо перешу перешкоду
+    loadObstacle('brickWall');
+  </script>
+</body>
+</html>

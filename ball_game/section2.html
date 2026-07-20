@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Section 2 — Maze + Fans</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:grid;place-items:center;background:#0b0d2a}
+  canvas{border-radius:14px; box-shadow:0 0 0 1px rgba(255,255,255,.06) inset}
+  .hud{position:fixed;left:12px;top:10px;font:14px/1 system-ui;color:#9fb0ff;opacity:.9}
+</style>
+</head>
+<body>
+  <div class="hud">Секція 2: Лабіринт з вентиляторами</div>
+
+  <!-- сцена -->
+  <canvas id="stage" width="390" height="700"></canvas>
+
+  <!-- Matter.js як глобальний об'єкт -->
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <!-- логіка секції -->
+  <script type="module" src="src/section2.js"></script>
+</body>
+</html>

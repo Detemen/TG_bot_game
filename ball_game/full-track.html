@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Повна Траса — Marble Race</title>
+<style>
+  html,body{height:100%;margin:0;font-family:system-ui,-apple-system,sans-serif}
+  body{
+    display:flex;flex-direction:column;align-items:center;
+    background:linear-gradient(180deg, #0a0e27 0%, #1a1e3f 100%);
+    color:#fff;padding:20px;overflow-x:hidden;
+  }
+  h1{margin:0 0 10px 0;font-size:28px;font-weight:600}
+  .subtitle{opacity:0.7;margin-bottom:20px;font-size:14px}
+
+  .controls{
+    display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;justify-content:center;
+    max-width:800px;
+  }
+  .controls button{
+    padding:12px 20px;border:none;border-radius:8px;
+    background:#2d3a5f;color:#fff;cursor:pointer;
+    font-size:14px;font-weight:500;transition:all 0.2s;
+  }
+  .controls button:hover{background:#3d4a6f;transform:translateY(-2px)}
+  .controls button.primary{background:#4a9eff}
+  .controls button.primary:hover{background:#5aafff}
+  .controls button.sound{background:#2d3a5f;position:relative}
+  .controls button.sound.enabled{background:#4a9eff}
+
+  #canvas-wrapper{
+    position:relative;border-radius:14px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    overflow-y:auto;overflow-x:hidden;
+    max-height:80vh;
+    margin:0 auto;
+  }
+
+  #canvas-wrapper::-webkit-scrollbar{width:8px}
+  #canvas-wrapper::-webkit-scrollbar-track{background:#1a1d35;border-radius:4px}
+  #canvas-wrapper::-webkit-scrollbar-thumb{background:#4a9eff;border-radius:4px}
+  #canvas-wrapper::-webkit-scrollbar-thumb:hover{background:#5aafff}
+  canvas{display:block;background:#05071a}
+
+  .info{
+    margin-top:20px;padding:15px 25px;background:rgba(45,58,95,0.5);
+    border-radius:12px;max-width:600px;text-align:center;
+    font-size:14px;line-height:1.6;
+  }
+  .info strong{color:#4a9eff}
+
+  .stats{
+    position:fixed;top:20px;right:20px;
+    background:rgba(20,25,40,0.9);padding:15px 20px;
+    border-radius:12px;min-width:200px;
+    backdrop-filter:blur(10px);
+  }
+  .stats h3{margin:0 0 10px 0;font-size:16px;color:#4a9eff}
+  .stats-item{display:flex;justify-content:space-between;margin:5px 0;font-size:13px}
+  .stats-value{color:#73ffe1;font-weight:600}
+
+  .finish-list{
+    max-height:200px;overflow-y:auto;margin-top:10px;
+  }
+  .finish-item{
+    padding:5px 10px;margin:3px 0;border-radius:6px;
+    background:rgba(74,158,255,0.2);font-size:12px;
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .finish-item .multiplier{
+    padding:2px 8px;border-radius:4px;background:#ffd700;
+    color:#000;font-weight:700;font-size:11px;
+  }
+</style>
+</head>
+<body>
+  <h1>🏁 Повна Траса з Фінішем</h1>
+  <p class="subtitle">Тестування повної гри з випадковою генерацією перешкод</p>
+
+  <div class="controls">
+    <button id="newRandomTrack" class="primary">🎲 Нова випадкова траса</button>
+    <button id="newBalancedTrack" class="primary">⚖️ Збалансована траса</button>
+    <button id="dropBall">Кинути кульку</button>
+    <button id="drop10Balls">Кинути 10 кульок</button>
+    <button id="drop50Balls">Кинути 50 кульок</button>
+    <button id="clearBalls">Очистити кульки</button>
+    <button id="toggleSound" class="sound">🔇 Звук</button>
+  </div>
+
+  <div id="canvas-wrapper">
+    <canvas id="stage" width="390" height="1600"></canvas>
+  </div>
+
+  <div class="stats">
+    <h3>📊 Статистика</h3>
+    <div class="stats-item">
+      <span>Seed:</span>
+      <span class="stats-value" id="seedValue">-</span>
+    </div>
+    <div class="stats-item">
+      <span>Перешкод:</span>
+      <span class="stats-value" id="obstacleCount">0</span>
+    </div>
+    <div class="stats-item">
+      <span>Кульок:</span>
+      <span class="stats-value" id="ballCount">0</span>
+    </div>
+    <div class="stats-item">
+      <span>Переможець:</span>
+      <span class="stats-value" id="finishedCount">-</span>
+    </div>
+    <div class="stats-item">
+      <span>FPS:</span>
+      <span class="stats-value" id="fpsCount">60</span>
+    </div>
+
+    <div class="finish-list" id="finishList"></div>
+  </div>
+
+  <div class="info">
+    <strong>Режим гри:</strong> <span id="trackMode">Випадкова траса</span><br>
+    <span id="trackDescription">Генеруються випадкові перешкоди. Мета - дістатися до фінішу!</span>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <script type="module">
+    import { generateRandomTrack, generateBalancedTrack } from './src/trackGenerator.js';
+    import { VisualEffectsManager, GlowSystem } from './src/visualEffects.js';
+    import { soundSystem } from './src/soundSystem.js';
+
+    const Matter = window.Matter;
+    const canvas = document.getElementById('stage');
+    const W = canvas.width;
+    const H = canvas.height; // 1600 для більшої карти
+
+    // Система візуальних ефектів
+    const vfx = new VisualEffectsManager();
+
+    // FPS трекер
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    // Створюємо движок
+    const engine = Matter.Engine.create();
+    engine.world.gravity.y = 1.1;
+
+    // Оптимізація для багатьох об'єктів
+    engine.timing.timeScale = 1;
+    engine.constraintIterations = 2; // За замовчуванням 2
+    engine.positionIterations = 6;   // За замовчуванням 6
+    engine.velocityIterations = 4;   // За замовчуванням 4
+
+    const render = Matter.Render.create({
+      canvas,
+      engine,
+      options: {
+        width: W,
+        height: H,
+        wireframes: false,
+        background: '#05071a',
+        pixelRatio: window.devicePixelRatio || 1
+      }
+    });
+
+    Matter.Engine.run(engine);
+    Matter.Render.run(render);
+
+    // Межі
+    const walls = [
+      Matter.Bodies.rectangle(W/2, -25, W, 50, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+      Matter.Bodies.rectangle(-25, H/2, 50, H, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+      Matter.Bodies.rectangle(W+25, H/2, 50, H, { isStatic: true, render: { fillStyle: '#1a1e3f' } }),
+    ];
+    Matter.World.add(engine.world, walls);
+
+    let currentTrack = null;
+    let finishedBalls = [];
+
+    // Функція створення кульки
+    function createBall(x = null, y = null) {
+      const spawnPoint = currentTrack ? currentTrack.spawnPoint : { x: W / 2, y: 30 };
+      const ballX = x || spawnPoint.x + (Math.random() - 0.5) * 40;
+      const ballY = y || spawnPoint.y;
+      const r = 12;
+
+      const colors = ['#73ffe1', '#75a6ff', '#f6ff7a', '#ff6bbd', '#b07bff', '#ff9f68'];
+      const color = colors[Math.floor(Math.random() * colors.length)];
+
+      const ball = Matter.Bodies.circle(ballX, ballY, r, {
+        restitution: 0.7,
+        friction: 0.05,
+        frictionAir: 0.01,
+        density: 0.002,
+        render: { fillStyle: color }
+      });
+
+      Matter.World.add(engine.world, ball);
+      updateStats();
+      return ball;
+    }
+
+    // Callback для фінішу - тільки один переможець!
+    function handleFinish(data) {
+      if (finishedBalls.length > 0) return; // Вже є переможець
+
+      finishedBalls.push(data);
+      updateStats();
+
+      // Додаємо floating text ефект
+      vfx.showText(data.x, data.y - 30, '🏆 ПЕРЕМОЖЕЦЬ!', '#ffd700', 28);
+
+      // Звуковий ефект фінішу
+      soundSystem.playFinish(10); // Максимальний акорд для переможця
+
+      // Видаляємо trail кульки що фінішувала
+      if (data.ballId) {
+        vfx.removeTrail(data.ballId);
+      }
+
+      const finishList = document.getElementById('finishList');
+      const item = document.createElement('div');
+      item.className = 'finish-item';
+      item.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:12px;height:12px;border-radius:50%;background:${data.color}"></div>
+          <span>🏆 ПЕРЕМОЖЕЦЬ!</span>
+        </div>
+      `;
+      finishList.prepend(item);
+
+      // Показуємо повідомлення
+      setTimeout(() => {
+        alert('🏆 Перша кулька фінішувала!\n\nГра закінчена.');
+      }, 500);
+    }
+
+    // Генерація траси
+    function loadTrack(type) {
+      // Очищаємо стару трасу
+      if (currentTrack) {
+        currentTrack.cleanup();
+
+        // Додатково видаляємо ВСІ bodies зі світу
+        Matter.World.clear(engine.world, false);
+
+        // Відновлюємо гравітацію після очищення
+        engine.world.gravity.y = 1.1;
+      }
+
+      clearAllBalls();
+      finishedBalls = [];
+      vfx.clear(); // Очищаємо візуальні ефекти
+      document.getElementById('finishList').innerHTML = '';
+
+      const seed = Math.floor(Math.random() * 1e9);
+
+      if (type === 'random') {
+        currentTrack = generateRandomTrack(Matter, engine, {
+          width: W,
+          height: H,
+          obstacleCount: 6, // Збільшено до 6 (маємо більше висоти)
+          seed: seed,
+          onFinish: handleFinish
+        });
+        document.getElementById('trackMode').textContent = 'Випадкова траса';
+        document.getElementById('trackDescription').textContent =
+          `${currentTrack.obstacles.length} випадкових перешкод. Seed: ${seed}`;
+      } else {
+        currentTrack = generateBalancedTrack(Matter, engine, {
+          width: W,
+          height: H,
+          seed: seed,
+          onFinish: handleFinish
+        });
+        document.getElementById('trackMode').textContent = 'Збалансована траса';
+        document.getElementById('trackDescription').textContent =
+          `Оптимізована траса з ${currentTrack.obstacles.length} перешкод. Seed: ${seed}`;
+      }
+
+      document.getElementById('seedValue').textContent = currentTrack.seed;
+      updateStats();
+    }
+
+    // Детектор зіткнень для візуальних ефектів
+    let lastSoundTime = 0;
+    const soundCooldown = 50; // мс між звуками
+
+    Matter.Events.on(engine, 'collisionStart', (event) => {
+      const currentTime = performance.now();
+      const canPlaySound = currentTime - lastSoundTime > soundCooldown;
+
+      event.pairs.forEach(pair => {
+        const { bodyA, bodyB } = pair;
+
+        // Знаходимо кульку
+        const ball = !bodyA.isStatic ? bodyA : (!bodyB.isStatic ? bodyB : null);
+        const obstacle = bodyA.isStatic ? bodyA : bodyB;
+
+        if (ball && obstacle) {
+          // Інтенсивність залежить від швидкості зіткнення
+          const speed = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2);
+          const intensity = Math.min(speed / 10, 2);
+
+          if (intensity > 0.3) {
+            const collision = pair.collision;
+            vfx.createCollisionEffect(
+              collision.supports[0].x,
+              collision.supports[0].y,
+              ball.render.fillStyle,
+              intensity
+            );
+
+            // Звуковий ефект зіткнення (з cooldown для продуктивності)
+            if (canPlaySound && intensity > 0.5) {
+              soundSystem.playCollision(intensity);
+              lastSoundTime = currentTime;
+            }
+
+            // Спеціальні звуки для певних перешкод
+            if (canPlaySound && obstacle.label === 'brick') {
+              soundSystem.playBrickBreak();
+              lastSoundTime = currentTime;
+            } else if (canPlaySound && obstacle.label === 'circleSegment') {
+              soundSystem.playRotatingCircle();
+              lastSoundTime = currentTime;
+            }
+          }
+        }
+      });
+    });
+
+    // Малюємо портали ПЕРЕД стандартним рендером (щоб трикутники були зверху)
+    Matter.Events.on(render, 'beforeRender', () => {
+      const ctx = render.context;
+
+      if (!currentTrack) return;
+
+      // Малюємо тільки портали (вони будуть ПІД іншими об'єктами)
+      currentTrack.obstacles.forEach(obs => {
+        if (obs.obstacle.renderPortals) {
+          obs.obstacle.renderPortals(ctx);
+        }
+      });
+    });
+
+    // Кастомний рендер для додаткових елементів
+    Matter.Events.on(render, 'afterRender', () => {
+      const ctx = render.context;
+
+      // FPS підрахунок
+      frameCount++;
+      const currentTime = performance.now();
+      if (currentTime - lastTime >= 1000) {
+        fps = Math.round(frameCount * 1000 / (currentTime - lastTime));
+        frameCount = 0;
+        lastTime = currentTime;
+        document.getElementById('fpsCount').textContent = fps;
+      }
+
+      // Оновлюємо та рендеримо ефекти
+      vfx.update();
+
+      // Додаємо trail points для кульок
+      const balls = engine.world.bodies.filter(b =>
+        !b.isStatic &&
+        b.label !== 'brick' &&
+        b.label !== 'peg' &&
+        b.label !== 'mazeBar' &&
+        b.label !== 'movingBar' &&
+        b.label !== 'triangle' &&
+        b.label !== 'greenPortal' &&
+        b.label !== 'redPortal' &&
+        b.label !== 'circleSegment'
+      );
+
+      // Оптимізація: для >30 кульок зменшуємо візуальні ефекти
+      const ballCount = balls.length;
+      const enableTrails = ballCount <= 30;
+      const enableGlow = ballCount <= 50;
+
+      // Знаходимо лідера (найближча кулька до фінішу = найбільша Y, бо фініш внизу)
+      let leader = null;
+      let maxY = -Infinity;
+      balls.forEach(ball => {
+        if (ball.position.y > maxY) {
+          maxY = ball.position.y;
+          leader = ball;
+        }
+      });
+
+      // Встановлюємо лідера
+      if (leader && balls.length > 1) {
+        vfx.setLeader(leader.id);
+      } else {
+        vfx.setLeader(null);
+      }
+
+      balls.forEach(ball => {
+        // Trail тільки для невеликої кількості кульок
+        if (enableTrails) {
+          vfx.addTrailPoint(ball.id, ball.position.x, ball.position.y, ball.render.fillStyle);
+        }
+
+        // Glow для середньої кількості
+        if (enableGlow) {
+          GlowSystem.drawGlow(ctx, ball.position.x, ball.position.y, 12, ball.render.fillStyle, 0.5);
+        }
+
+        // Корона для лідера
+        vfx.renderLeaderCrown(ctx, ball);
+      });
+
+      // Рендеримо всі ефекти
+      vfx.render(ctx);
+
+      // Рендеримо перешкоди
+      if (!currentTrack) return;
+
+      // Всі ефекти (портали вже намальовані в beforeRender)
+      currentTrack.obstacles.forEach(obs => {
+        if (obs.obstacle.renderFans) {
+          obs.obstacle.renderFans(ctx);
+        }
+        if (obs.obstacle.renderCircles) {
+          obs.obstacle.renderCircles(ctx);
+        }
+        if (obs.obstacle.renderFinish) {
+          obs.obstacle.renderFinish(ctx);
+        }
+        if (obs.obstacle.renderBumpers) {
+          obs.obstacle.renderBumpers(ctx);
+        }
+        if (obs.obstacle.renderGravityZone) {
+          obs.obstacle.renderGravityZone(ctx);
+        }
+        if (obs.obstacle.renderPlinko) {
+          obs.obstacle.renderPlinko(ctx);
+        }
+      });
+    });
+
+    // Очистка кульок
+    function clearAllBalls() {
+      const balls = engine.world.bodies.filter(b =>
+        !b.isStatic &&
+        b.label !== 'brick' &&
+        b.label !== 'peg' &&
+        b.label !== 'mazeBar' &&
+        b.label !== 'movingBar' &&
+        b.label !== 'triangle' &&
+        b.label !== 'greenPortal' &&
+        b.label !== 'redPortal' &&
+        b.label !== 'circleSegment'
+      );
+
+      // Видаляємо trails для всіх кульок
+      balls.forEach(ball => vfx.removeTrail(ball.id));
+
+      Matter.World.remove(engine.world, balls);
+      vfx.clear();
+      updateStats();
+    }
+
+    // Оновлення статистики
+    function updateStats() {
+      const ballCount = engine.world.bodies.filter(b =>
+        !b.isStatic &&
+        b.label !== 'brick' &&
+        b.label !== 'peg' &&
+        b.label !== 'mazeBar'
+      ).length;
+
+      document.getElementById('ballCount').textContent = ballCount;
+
+      // Показуємо переможця або "-"
+      if (finishedBalls.length > 0) {
+        document.getElementById('finishedCount').textContent = '🏆';
+      } else {
+        document.getElementById('finishedCount').textContent = '-';
+      }
+
+      if (currentTrack) {
+        document.getElementById('obstacleCount').textContent = currentTrack.obstacles.length;
+      }
+    }
+
+    // Кнопки
+    document.getElementById('newRandomTrack').addEventListener('click', () => loadTrack('random'));
+    document.getElementById('newBalancedTrack').addEventListener('click', () => loadTrack('balanced'));
+    document.getElementById('dropBall').addEventListener('click', async () => {
+      // Ініціалізуємо звук при першому кліку
+      if (!soundSystem.isEnabled()) {
+        await soundSystem.init();
+      }
+      createBall();
+    });
+    document.getElementById('drop10Balls').addEventListener('click', async () => {
+      if (!soundSystem.isEnabled()) {
+        await soundSystem.init();
+      }
+      for (let i = 0; i < 10; i++) {
+        setTimeout(() => createBall(), i * 100);
+      }
+    });
+    document.getElementById('drop50Balls').addEventListener('click', async () => {
+      if (!soundSystem.isEnabled()) {
+        await soundSystem.init();
+      }
+      for (let i = 0; i < 50; i++) {
+        setTimeout(() => createBall(), i * 50);
+      }
+    });
+    document.getElementById('clearBalls').addEventListener('click', clearAllBalls);
+
+    // Кнопка перемикання звуку
+    document.getElementById('toggleSound').addEventListener('click', async () => {
+      if (!soundSystem.isEnabled()) {
+        await soundSystem.init();
+      }
+      const enabled = soundSystem.toggle();
+      const btn = document.getElementById('toggleSound');
+      btn.textContent = enabled ? '🔊 Звук' : '🔇 Звук';
+      btn.classList.toggle('enabled', enabled);
+    });
+
+    // Клік на canvas
+    canvas.addEventListener('pointerdown', async (e) => {
+      if (!soundSystem.isEnabled()) {
+        await soundSystem.init();
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+      createBall(x, y);
+    });
+
+    // Завантажуємо першу трасу
+    loadTrack('random');
+
+    // Періодичне оновлення статистики
+    setInterval(updateStats, 500);
+  </script>
+</body>
+</html>

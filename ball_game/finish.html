@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Фініш — ромби (ваші розміри) + повідомлення</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:grid;place-items:center;background:#0a0e27}
+  canvas{border-radius:14px; box-shadow:0 0 0 1px rgba(255,255,255,.06) inset}
+  .msg{
+    position:fixed; inset:auto 0 24px 0; margin:auto; width:max-content;
+    background:#111; color:#fff; font:600 18px/1.2 system-ui;
+    padding:10px 16px; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,.35);
+    opacity:0; transform:translateY(8px); transition:.25s ease;
+  }
+  .msg.show{ opacity:1; transform:none; }
+</style>
+</head>
+<body>
+  <canvas id="stage" width="390" height="700"></canvas>
+  <div id="finishMsg" class="msg">ФІНІШ!</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <script type="module" src="src/finish.js"></script>
+</body>
+</html>

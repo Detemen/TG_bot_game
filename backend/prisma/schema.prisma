@@ -1,0 +1,194 @@
+// Prisma schema for Marble Race Game
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Users table - Telegram users
+model User {
+  id           String   @id @default(uuid())
+  telegramId   String   @unique @map("telegram_id")
+  username     String?
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  tonAddress   String?  @map("ton_address")
+
+  // Balances
+  balanceTon   String   @default("0") @map("balance_ton")
+  balanceStars Int      @default(0) @map("balance_stars")
+
+  // Referral
+  referralCode String   @unique @map("referral_code")
+  referrerId   String?  @map("referrer_id")
+  referrer     User?    @relation("Referrals", fields: [referrerId], references: [id])
+  referrals    User[]   @relation("Referrals")
+
+  // Bot flag
+  isBot        Boolean  @default(false) @map("is_bot")
+
+  // Stats
+  totalGames   Int      @default(0) @map("total_games")
+  totalWins    Int      @default(0) @map("total_wins")
+  totalEarned  String   @default("0") @map("total_earned")
+
+  // Timestamps
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bets         Bet[]
+  transactions Transaction[]
+  wonGames     Game[]    @relation("GameWinner")
+
+  @@map("users")
+}
+
+// Games table
+model Game {
+  id          String      @id @default(uuid())
+  seed        String      @unique
+  trackConfig Json        @map("track_config")
+  difficulty  String      @default("medium")
+
+  // Game status
+  status      GameStatus  @default(WAITING)
+
+  // Pot amounts
+  potTon      String      @default("0") @map("pot_ton")
+  potStars    Int         @default(0) @map("pot_stars")
+
+  // Winner
+  winnerId    String?     @map("winner_id")
+  winner      User?       @relation("GameWinner", fields: [winnerId], references: [id])
+  winnerBallId Int?       @map("winner_ball_id")
+  winningTime String?     @map("winning_time")
+
+  // Timing
+  startTime   DateTime?   @map("start_time")
+  endTime     DateTime?   @map("end_time")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // Settings
+  maxPlayers  Int         @default(60) @map("max_players")
+  maxBallsPerPlayer Int   @default(10) @map("max_balls_per_player")
+  ballPriceTon String     @default("0.1") @map("ball_price_ton")
+  ballPriceStars Int      @default(10) @map("ball_price_stars")
+
+  // Relations
+  bets        Bet[]
+
+  @@index([status])
+  @@index([winnerId])
+  @@map("games")
+}
+
+enum GameStatus {
+  WAITING    // Waiting for players
+  STARTING   // Countdown started (30s)
+  RUNNING    // Game in progress
+  FINISHED   // Game ended
+  CANCELLED  // Game cancelled (not enough players)
+}
+
+// Bets table - player bets (balls purchased)
+model Bet {
+  id          String   @id @default(uuid())
+  gameId      String   @map("game_id")
+  game        Game     @relation(fields: [gameId], references: [id])
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id])
+
+  // Bet details
+  ballCount   Int      @map("ball_count")
+  amountTon   String   @default("0") @map("amount_ton")
+  amountStars Int      @default(0) @map("amount_stars")
+  currency    Currency
+
+  // Ball colors for visual distinction
+  ballColors  Json     @map("ball_colors")
+
+  // Result
+  isWinner    Boolean  @default(false) @map("is_winner")
+  payout      String   @default("0")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([gameId, userId])
+  @@index([gameId])
+  @@index([userId])
+  @@map("bets")
+}
+
+enum Currency {
+  TON
+  STARS
+}
+
+// Transactions table - all financial operations
+model Transaction {
+  id            String          @id @default(uuid())
+  userId        String          @map("user_id")
+  user          User            @relation(fields: [userId], references: [id])
+
+  type          TransactionType
+  amount        String
+  currency      Currency
+  status        TransactionStatus @default(PENDING)
+
+  // References
+  gameId        String?         @map("game_id")
+  referenceId   String?         @map("reference_id") // External tx ID (TON/Stars)
+
+  // Metadata
+  metadata      Json?
+  errorMessage  String?         @map("error_message")
+
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  @@index([userId, type])
+  @@index([userId, status])
+  @@index([status])
+  @@index([referenceId])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  DEPOSIT_TON
+  DEPOSIT_STARS
+  WITHDRAW_TON
+  WITHDRAW_STARS
+  BET_PLACED
+  WIN_PAYOUT
+  REFERRAL_BONUS
+  COMMISSION
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Referral earnings tracking
+model ReferralEarning {
+  id           String   @id @default(uuid())
+  referrerId   String   @map("referrer_id")
+  referredUserId String @map("referred_user_id")
+  gameId       String   @map("game_id")
+
+  amount       String
+  currency     Currency
+  percentage   String // 5.00 = 5%
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([referrerId])
+  @@map("referral_earnings")
+}

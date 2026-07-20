@@ -1,0 +1,53 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.caption {
+  margin: 0;
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  color: #6d7ca7;
+  text-transform: uppercase;
+}
+
+.stage {
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(10, 17, 32, 0.55);
+  border: 1px solid rgba(137, 162, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.badge {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(115, 255, 225, 0.2);
+  color: #73ffe1;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stage p {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.stage small {
+  color: #8898c2;
+}
+
+.footerNote {
+  margin-top: auto;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(9, 15, 27, 0.5);
+  font-size: 0.9rem;
+  color: #9caadb;
+  line-height: 1.5;
+}

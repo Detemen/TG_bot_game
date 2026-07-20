@@ -1,0 +1,344 @@
+import { useEffect, useRef, useState } from 'react';
+import Matter from 'matter-js';
+import { generateMaze, createFinishLine } from '../physics/maze-generator';
+import styles from './MatterCanvas.module.css';
+
+interface LeaderboardEntry {
+  id: number;
+  label: string;
+  color: string;
+  time: number;
+}
+
+interface MatterCanvasProps {
+  width: number;
+  height: number;
+  seed?: string;
+  ballCount?: number;
+  ballMetadata?: Array<{ label: string; color: string }>;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  onFinish?: (ballId: number, time: number) => void;
+  onLeaderboardUpdate?: (finishers: LeaderboardEntry[]) => void;
+}
+
+export function MatterCanvas({
+  width,
+  height,
+  seed = 'default-seed',
+  ballCount = 10,
+  ballMetadata = [],
+  difficulty = 'medium',
+  onFinish,
+  onLeaderboardUpdate,
+}: MatterCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ballMetaRef = useRef<Map<number, { label: string; color: string }>>(new Map());
+  const finishersRef = useRef<LeaderboardEntry[]>([]);
+  const startTimeRef = useRef(0);
+  const [fps, setFps] = useState(60);
+  const [winner, setWinner] = useState<{ ballId: number; time: number } | null>(null);
+
+  console.log('[MatterCanvas] State:', { seed, ballCount, ballMetadata });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Reset state
+    setWinner(null);
+    finishersRef.current = [];
+    ballMetaRef.current.clear();
+    setFps(60);
+    startTimeRef.current = performance.now() / 1000;
+
+    // Set canvas size
+    canvas.width = width;
+    canvas.height = height;
+
+    // Create engine
+    const engine = Matter.Engine.create({
+      gravity: { x: 0, y: 1 },
+    });
+
+    console.log('[MatterCanvas] Engine created, gravity:', engine.gravity);
+
+    // Create runner
+    const runner = Matter.Runner.create();
+
+    // Generate maze with platforms and pegs
+    const { World, Events } = Matter;
+    const maze = generateMaze({ width, height, seed, difficulty });
+
+    console.log('[MatterCanvas] 🎮 Maze generated:', {
+      platforms: maze.platforms.length,
+      pegs: maze.pegs.length,
+      walls: maze.walls.length,
+    });
+
+    // Add all maze elements to world
+    World.add(engine.world, maze.walls);
+    World.add(engine.world, maze.platforms.map(p => p.body));
+    World.add(engine.world, maze.pegs.map(p => p.body));
+
+    // Create finish line sensor
+    const finishSensor = createFinishLine(width, height);
+    World.add(engine.world, finishSensor);
+
+    const finishedBalls = new Set<number>();
+
+    // Collision detection for finish
+    Events.on(engine, 'collisionStart', (event) => {
+      event.pairs.forEach((pair) => {
+        const { bodyA, bodyB } = pair;
+        const ball = bodyA.label === 'finishLine' ? bodyB : bodyA;
+        const sensor = bodyA.label === 'finishLine' ? bodyA : bodyB;
+
+        if (sensor.label === 'finishLine' && ball.label?.startsWith('ball_') && !finishedBalls.has(ball.id)) {
+          console.log('[FinishLine] 🏁 Ball finished!', ball.id, ball.label);
+          finishedBalls.add(ball.id);
+
+          const relativeTime = Math.max(0, performance.now() / 1000 - startTimeRef.current);
+          const meta = ballMetaRef.current.get(ball.id);
+
+          const entry: LeaderboardEntry = {
+            id: ball.id,
+            label: meta?.label ?? `Ball #${ball.id}`,
+            color: meta?.color ?? '#ffffff',
+            time: relativeTime,
+          };
+
+          const nextFinishers = [...finishersRef.current, entry];
+          finishersRef.current = nextFinishers;
+
+          if (nextFinishers.length === 1) {
+            console.log('[FinishLine] 🏆 Winner!', ball.id);
+            setWinner({ ballId: ball.id, time: relativeTime });
+          }
+
+          onLeaderboardUpdate?.(finishersRef.current);
+
+          if (onFinish) {
+            onFinish(ball.id, relativeTime);
+          }
+        }
+      });
+    });
+
+
+    // Spawn balls after a short delay
+    setTimeout(() => {
+      spawnBalls(engine, width, ballCount, seed, ballMetadata, ballMetaRef.current);
+
+      // Debug: Check if balls are visible after spawn
+      setTimeout(() => {
+        const allBodies = Matter.Composite.allBodies(engine.world);
+        const ballBodies = allBodies.filter(b => b.label?.startsWith('ball_'));
+        console.log('[MatterCanvas] 🔍 After spawn check:', {
+          totalBodies: allBodies.length,
+          ballBodies: ballBodies.length,
+          firstBall: ballBodies[0] ? {
+            pos: ballBodies[0].position,
+            velocity: ballBodies[0].velocity,
+            visible: ballBodies[0].render.visible,
+            circleRadius: ballBodies[0].circleRadius
+          } : 'NO BALLS'
+        });
+      }, 100);
+    }, 500);
+
+    // Start simulation
+    Matter.Runner.run(runner, engine);
+
+    // FPS monitoring
+    const fpsInterval = setInterval(() => {
+      const currentFps = Math.round(1000 / engine.timing.lastDelta);
+      setFps(currentFps);
+    }, 1000);
+
+    // Custom render loop
+    let animationId: number;
+    let lastTime = performance.now();
+
+    const renderLoop = () => {
+      const now = performance.now();
+      const delta = (now - lastTime) / 1000;
+      lastTime = now;
+
+      // Render to canvas
+      drawScene(ctx, engine, width, height);
+
+      // Draw finish line text
+      const finishY = height - 60;
+      ctx.save();
+      ctx.font = 'bold 24px monospace';
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.textAlign = 'center';
+      ctx.strokeText('FINISH', width / 2, finishY + 30);
+      ctx.fillText('FINISH', width / 2, finishY + 30);
+      ctx.restore();
+
+      animationId = requestAnimationFrame(renderLoop);
+    };
+    renderLoop();
+
+    // Cleanup
+    return () => {
+      clearInterval(fpsInterval);
+      cancelAnimationFrame(animationId);
+      Matter.Runner.stop(runner);
+      Matter.World.clear(engine.world, false);
+      Matter.Engine.clear(engine);
+    };
+  }, [width, height, seed, ballCount, ballMetadata, onFinish, onLeaderboardUpdate]);
+
+  return (
+    <div className={styles.wrapper}>
+      <canvas ref={canvasRef} className={styles.canvas} />
+      <div className={styles.stats}>
+        <span>FPS: {fps}</span>
+        <span>Кульок: {ballCount}</span>
+        <span>Seed: {seed}</span>
+        <span>Складність: {difficulty}</span>
+        {winner && (
+          <span style={{ color: '#22c55e', fontWeight: 'bold' }}>
+            🏆 Переможець: Ball #{winner.ballId} ({winner.time.toFixed(2)}s)
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function spawnBalls(
+  engine: Matter.Engine,
+  width: number,
+  count: number,
+  seed: string | undefined,
+  ballMetadata: Array<{ label: string; color: string }>,
+  meta: Map<number, { label: string; color: string }>
+) {
+  const { Bodies, World } = Matter;
+  const balls: Matter.Body[] = [];
+  const defaultColors = ['#73ffe1', '#75a6ff', '#f6ff7a', '#ff6bbd', '#b07bff', '#ff9f68'];
+
+  // Simple RNG based on seed
+  let seedValue = seed ? hashCode(seed) : Date.now();
+  const random = () => {
+    seedValue = (seedValue * 9301 + 49297) % 233280;
+    return seedValue / 233280;
+  };
+
+  for (let i = 0; i < count; i++) {
+    const x = width * 0.3 + random() * width * 0.4;
+    const y = 20 + i * 5;
+
+    // Use metadata if available, otherwise generate defaults
+    const ballMeta = ballMetadata[i] || {
+      label: `Ball #${i + 1}`,
+      color: defaultColors[i % defaultColors.length],
+    };
+
+    const ball = Bodies.circle(x, y, 15, {  // Збільшив радіус з 12 до 15
+      restitution: 0.7,
+      friction: 0.05,
+      frictionAir: 0.01,
+      density: 0.004,  // Збільшив щоб краще падала
+      label: `ball_${i}`,
+      render: {
+        fillStyle: ballMeta.color,
+        visible: true,
+        strokeStyle: '#ffffff',  // Додав білу обводку
+        lineWidth: 2,
+      },
+    });
+
+    meta.set(ball.id, ballMeta);
+    balls.push(ball);
+  }
+
+  World.add(engine.world, balls);
+
+  // Log once (not in render loop)
+  console.log(`[MatterCanvas] ✅ Spawned ${balls.length} balls at positions:`, balls.slice(0, 3).map(b => ({
+    id: b.id,
+    pos: `(${Math.round(b.position.x)}, ${Math.round(b.position.y)})`,
+    visible: b.render.visible
+  })));
+  console.log('[MatterCanvas] Total bodies in world:', engine.world.bodies.length);
+}
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash);
+}
+
+function drawScene(
+  ctx: CanvasRenderingContext2D,
+  engine: Matter.Engine,
+  width: number,
+  height: number
+) {
+  ctx.save();
+
+  // Clear canvas
+  ctx.clearRect(0, 0, width, height);
+
+  // Background gradient
+  const gradient = ctx.createLinearGradient(0, 0, 0, height);
+  gradient.addColorStop(0, '#040b18');
+  gradient.addColorStop(1, '#0f1b36');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw all bodies
+  const bodies = Matter.Composite.allBodies(engine.world);
+  const balls = bodies.filter(b => b.label?.startsWith('ball_'));
+
+  bodies.forEach((body) => {
+    if (!body.render.visible) return;
+
+    ctx.beginPath();
+
+    if (body.circleRadius) {
+      // Draw circle
+      ctx.arc(body.position.x, body.position.y, body.circleRadius, 0, Math.PI * 2);
+    } else {
+      // Draw polygon
+      const vertices = body.vertices;
+      ctx.moveTo(vertices[0].x, vertices[0].y);
+      for (let i = 1; i < vertices.length; i++) {
+        ctx.lineTo(vertices[i].x, vertices[i].y);
+      }
+      ctx.closePath();
+    }
+
+    ctx.fillStyle = body.render.fillStyle || '#fff';
+    ctx.fill();
+
+    if (body.render.strokeStyle) {
+      ctx.strokeStyle = body.render.strokeStyle;
+      ctx.lineWidth = body.render.lineWidth || 1;
+      ctx.stroke();
+    }
+  });
+
+  ctx.restore();
+}
+
+function drawObstaclesCustom(ctx: CanvasRenderingContext2D, obstacles: Obstacle[]) {
+  obstacles.forEach((obstacle) => {
+    if (obstacle.renderCustom) {
+      obstacle.renderCustom(ctx);
+    }
+  });
+}

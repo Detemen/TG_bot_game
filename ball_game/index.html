@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Balls + Random Maps</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>🎱 Balls + Random Maps</h1>
+    <div class="controls">
+      <label>Seed <input id="seed" type="text" placeholder="random" value="12314"></label>
+      <label>Count <input id="count" type="number" min="3" max="12" value="6"></label>
+      <label>W×H
+        <input id="w" type="number" value="360"> ×
+        <input id="h" type="number" value="520">
+      </label>
+      <button id="newMap">New map</button>
+      <button id="dropBall">Drop ball</button>
+      <button id="clearBalls">Clear balls</button>
+    </div>
+  </header>
+
+  <main>
+    <canvas id="stage" width="360" height="520"></canvas>
+  </main>
+
+  <footer>
+    ЛКМ/тап — кинути кульку в точку. Перешкоди: бруски, трикутники, кола, зірки.
+  </footer>
+
+  <!-- Matter.js як глобальна змінна (надійно для браузера) -->
+  <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+  <!-- Ігрова логіка -->
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

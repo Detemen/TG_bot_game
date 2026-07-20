@@ -1,0 +1,151 @@
+// Prisma schema for Marble Race Game (SQLite version for testing)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Users table - Telegram users
+model User {
+  id           String   @id @default(uuid())
+  telegramId   String   @unique @map("telegram_id")
+  username     String?
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  tonAddress   String?  @map("ton_address")
+
+  // Balances
+  balanceTon   Float    @default(0) @map("balance_ton")
+  balanceStars Int      @default(0) @map("balance_stars")
+
+  // Referral
+  referralCode String   @unique @map("referral_code")
+  referrerId   String?  @map("referrer_id")
+  referrer     User?    @relation("Referrals", fields: [referrerId], references: [id])
+  referrals    User[]   @relation("Referrals")
+
+  // Stats
+  totalGames   Int      @default(0) @map("total_games")
+  totalWins    Int      @default(0) @map("total_wins")
+  totalEarned  Float    @default(0) @map("total_earned")
+
+  // Timestamps
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  bets         Bet[]
+  transactions Transaction[]
+  wonGames     Game[]    @relation("GameWinner")
+
+  @@map("users")
+}
+
+// Games table
+model Game {
+  id          String      @id @default(uuid())
+  seed        String      @unique
+  trackConfig String      @map("track_config") // JSON as string
+  difficulty  String      @default("medium")
+
+  // Game status
+  status      String      @default("WAITING")
+
+  // Pot amounts
+  potTon      Float       @default(0) @map("pot_ton")
+  potStars    Int         @default(0) @map("pot_stars")
+
+  // Winner
+  winnerId    String?     @map("winner_id")
+  winner      User?       @relation("GameWinner", fields: [winnerId], references: [id])
+  winnerBallId Int?       @map("winner_ball_id")
+  winningTime Float?      @map("winning_time")
+
+  // Timing
+  startTime   DateTime?   @map("start_time")
+  endTime     DateTime?   @map("end_time")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  // Settings
+  maxPlayers  Int         @default(60) @map("max_players")
+  maxBallsPerPlayer Int   @default(10) @map("max_balls_per_player")
+  ballPriceTon Float      @default(0.1) @map("ball_price_ton")
+  ballPriceStars Int      @default(10) @map("ball_price_stars")
+
+  // Relations
+  bets        Bet[]
+
+  @@map("games")
+}
+
+// Bets table - player bets (balls purchased)
+model Bet {
+  id          String   @id @default(uuid())
+  gameId      String   @map("game_id")
+  game        Game     @relation(fields: [gameId], references: [id])
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id])
+
+  // Bet details
+  ballCount   Int      @map("ball_count")
+  amountTon   Float    @default(0) @map("amount_ton")
+  amountStars Int      @default(0) @map("amount_stars")
+  currency    String
+
+  // Ball colors for visual distinction
+  ballColors  String   @map("ball_colors") // JSON as string
+
+  // Result
+  isWinner    Boolean  @default(false) @map("is_winner")
+  payout      Float    @default(0)
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([gameId, userId])
+  @@map("bets")
+}
+
+// Transactions table - all financial operations
+model Transaction {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id])
+
+  type          String
+  amount        Float
+  currency      String
+  status        String   @default("PENDING")
+
+  // References
+  gameId        String?  @map("game_id")
+  referenceId   String?  @map("reference_id") // External tx ID (TON/Stars)
+
+  // Metadata
+  metadata      String?  // JSON as string
+  errorMessage  String?  @map("error_message")
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("transactions")
+}
+
+// Referral earnings tracking
+model ReferralEarning {
+  id           String   @id @default(uuid())
+  referrerId   String   @map("referrer_id")
+  referredUserId String @map("referred_user_id")
+  gameId       String   @map("game_id")
+
+  amount       Float
+  currency     String
+  percentage   Float // 5.00 = 5%
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("referral_earnings")
+}
