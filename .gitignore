@@ -23,6 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-store/
 dist/
+dist-demo/
 build/
 .next/
 .nuxt/

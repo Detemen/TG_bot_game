@@ -10,7 +10,7 @@ const generateReferralCode = customAlphabet(
 );
 
 export interface CreateUserInput {
-  telegramId: bigint;
+  telegramId: string;
   username?: string;
   firstName?: string;
   lastName?: string;
@@ -92,7 +92,7 @@ export class UserService {
   /**
    * Get user by Telegram ID
    */
-  async getUserByTelegramId(telegramId: bigint): Promise<User | null> {
+  async getUserByTelegramId(telegramId: string): Promise<User | null> {
     return prisma.user.findUnique({
       where: { telegramId },
     });
@@ -223,16 +223,21 @@ export class UserService {
       where: { referrerId: userId },
     });
 
-    const earnings = await prisma.referralEarning.aggregate({
+    // `amount` is stored as a String (SQLite has no precise decimal type), so
+    // Prisma can't `_sum` it — we fetch the rows and total them with Decimal.
+    const earningRows = await prisma.referralEarning.findMany({
       where: { referrerId: userId },
-      _sum: {
-        amount: true,
-      },
+      select: { amount: true },
     });
+
+    const totalEarnings = earningRows.reduce(
+      (total, { amount }) => D.add(total, amount),
+      "0",
+    );
 
     return {
       totalReferrals: referralsCount,
-      totalEarnings: earnings._sum.amount?.toString() || "0",
+      totalEarnings,
     };
   }
 

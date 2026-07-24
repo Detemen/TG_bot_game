@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { gameService } from "../services/game-service.js";
-import { Currency, Prisma } from "@prisma/client";
+import { Currency } from "@prisma/client";
 
 interface GameIdParams {
   id: string;
@@ -300,7 +300,7 @@ export async function registerGameRoutes(app: FastifyInstance) {
         gameId: id,
         winnerId,
         winnerBallId,
-        winningTime: new Prisma.Decimal(winningTime),
+        winningTime: String(winningTime),
       });
 
       return reply.send({

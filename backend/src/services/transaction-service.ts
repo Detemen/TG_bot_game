@@ -383,25 +383,40 @@ export class TransactionService {
   }> {
     const completedWhere = { userId, status: TransactionStatus.COMPLETED };
 
+    // `amount` is stored as a String (SQLite has no precise decimal type), so
+    // Prisma can't `_sum` it. We fetch the matching rows and total them with
+    // Prisma.Decimal for exact arithmetic.
+    const sumAmounts = async (
+      where: Prisma.TransactionWhereInput,
+    ): Promise<Prisma.Decimal> => {
+      const rows = await prisma.transaction.findMany({
+        where,
+        select: { amount: true },
+      });
+      return rows.reduce(
+        (total, { amount }) => total.plus(new Prisma.Decimal(amount || "0")),
+        new Prisma.Decimal("0"),
+      );
+    };
+
     const [depositsTon, depositsStars, withdrawTon, withdrawStars, betsTon, betsStars, winTon, winStars] = await Promise.all([
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.DEPOSIT_TON }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.DEPOSIT_STARS }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.WITHDRAW_TON }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.WITHDRAW_STARS }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.BET_PLACED, currency: Currency.TON }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.BET_PLACED, currency: Currency.STARS }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.WIN_PAYOUT, currency: Currency.TON }, _sum: { amount: true } }),
-      prisma.transaction.aggregate({ where: { ...completedWhere, type: TransactionType.WIN_PAYOUT, currency: Currency.STARS }, _sum: { amount: true } }),
+      sumAmounts({ ...completedWhere, type: TransactionType.DEPOSIT_TON }),
+      sumAmounts({ ...completedWhere, type: TransactionType.DEPOSIT_STARS }),
+      sumAmounts({ ...completedWhere, type: TransactionType.WITHDRAW_TON }),
+      sumAmounts({ ...completedWhere, type: TransactionType.WITHDRAW_STARS }),
+      sumAmounts({ ...completedWhere, type: TransactionType.BET_PLACED, currency: Currency.TON }),
+      sumAmounts({ ...completedWhere, type: TransactionType.BET_PLACED, currency: Currency.STARS }),
+      sumAmounts({ ...completedWhere, type: TransactionType.WIN_PAYOUT, currency: Currency.TON }),
+      sumAmounts({ ...completedWhere, type: TransactionType.WIN_PAYOUT, currency: Currency.STARS }),
     ]);
 
-    const toNum = (v: any) => parseInt(v?.toString() || "0");
-    const toDec = (v: any) => new Prisma.Decimal(v?.toString() || "0");
+    const toNum = (v: Prisma.Decimal) => v.toNumber();
 
     return {
-      totalDeposits: { ton: toDec(depositsTon._sum.amount), stars: toNum(depositsStars._sum.amount) },
-      totalWithdrawals: { ton: toDec(withdrawTon._sum.amount), stars: toNum(withdrawStars._sum.amount) },
-      totalBets: { ton: toDec(betsTon._sum.amount), stars: toNum(betsStars._sum.amount) },
-      totalWinnings: { ton: toDec(winTon._sum.amount), stars: toNum(winStars._sum.amount) },
+      totalDeposits: { ton: depositsTon, stars: toNum(depositsStars) },
+      totalWithdrawals: { ton: withdrawTon, stars: toNum(withdrawStars) },
+      totalBets: { ton: betsTon, stars: toNum(betsStars) },
+      totalWinnings: { ton: winTon, stars: toNum(winStars) },
     };
   }
 }

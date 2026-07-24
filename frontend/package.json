@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:local": "vite",
+    "dev:demo": "vite --config vite.demo.config.ts",
     "build": "tsc && vite build",
+    "build:demo": "vite build --config vite.demo.config.ts && cp dist-demo/demo.html dist-demo/index.html",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

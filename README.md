@@ -7,6 +7,12 @@
 
 Telegram Mini App для ігор у Marble Race з можливістю робити ставки в TON та Telegram Stars.
 
+### 🎮 [Грати в demo фізики →](https://detemen.github.io/TG_bot_game/)
+
+Відкрита demo-версія показує ядро гри — заїзд 24 кульок по процедурно згенерованій
+трасі (Matter.js, 60 FPS), без Telegram і бекенду. Повна гра зі ставками працює як
+Telegram Mini App.
+
 ## 🚀 Швидкий старт
 
 ### Варіант 1: Тестування через Telegram (ngrok) - РЕКОМЕНДОВАНО
@@ -73,7 +79,7 @@ Telegram Mini App для ігор у Marble Race з можливістю роб�
    http://192.168.1.100:5173
    ```
 
-📖 **Детальна інструкція:** [LOCAL_TESTING.md](LOCAL_TESTING.md)
+📖 **Детальна інструкція:** [LOCAL_TESTING.md](docs/setup/LOCAL_TESTING.md)
 
 ---
 
@@ -191,7 +197,7 @@ npm run build
 ## 📚 Документація
 
 - [API Reference](backend/API.md) - Повний список endpoints
-- [TESTING.md](TESTING.md) - Інструкції з тестування
+- [TESTING.md](docs/setup/TESTING.md) - Інструкції з тестування
 
 ## 🏗️ Реалізовані функції
 
@@ -222,9 +228,10 @@ npm run build
 ## 🛠️ Технології
 
 **Backend:**
-- Fastify - швидкий веб-фреймворк
-- Prisma - ORM для PostgreSQL
-- PostgreSQL - база даних
+- Fastify - швидкий веб-фреймворк (+ WebSocket)
+- Prisma - ORM
+- SQLite - база даних (файлова, без окремого сервера)
+- decimal.js - точна арифметика балансів
 - Zod - валідація даних
 - nanoid - генерація referral кодів
 

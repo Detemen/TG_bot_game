@@ -583,7 +583,7 @@ export class GameService {
   async getGameStats(gameId: string): Promise<{
     totalPlayers: number;
     totalBalls: number;
-    totalPot: { ton: Prisma.Decimal; stars: number };
+    totalPot: { ton: string; stars: number };
     avgBallsPerPlayer: number;
   }> {
     const game = await this.getGameById(gameId, true);

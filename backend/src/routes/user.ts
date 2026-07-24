@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { userService } from "../services/user-service.js";
 import { transactionService } from "../services/transaction-service.js";
-import { Currency, Prisma } from "@prisma/client";
+import { Currency } from "@prisma/client";
 
 interface UserIdParams {
   id: string;
@@ -139,7 +139,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
 
       const transaction = await transactionService.processDeposit({
         userId,
-        amount: new Prisma.Decimal(amount),
+        amount: String(amount),
         currency,
         referenceId,
         metadata,
@@ -194,7 +194,7 @@ export async function registerUserRoutes(app: FastifyInstance) {
 
       const transaction = await transactionService.processWithdrawal({
         userId,
-        amount: new Prisma.Decimal(amount),
+        amount: String(amount),
         currency,
         metadata: { tonAddress },
       });
